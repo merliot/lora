@@ -13,9 +13,16 @@ var (
 )
 
 var (
-	uart1 = machine.UART1
-	tx1   = machine.UART1_TX_PIN
-	rx1   = machine.UART1_RX_PIN
+	uart1 = machine.UART4
+	tx1   = machine.D0
+	rx1   = machine.D1
+
+//pico	uart1 = machine.UART1
+//pico	tx1   = machine.GPIO4
+//pico	rx1   = machine.GPIO5
+
+// tx1   = machine.UART1_TX_PIN
+// rx1   = machine.UART1_RX_PIN
 )
 
 func handle(input []byte) {
@@ -30,7 +37,7 @@ func handle(input []byte) {
 	}
 }
 
-var buf [242]byte
+var buf [1024]byte
 
 func exec(cmd, expect string, wait int) {
 	uart.Write([]byte(cmd))
@@ -55,9 +62,11 @@ func exec(cmd, expect string, wait int) {
 func main() {
 	time.Sleep(2 * time.Second)
 
+	println("start")
 	uart.Configure(machine.UARTConfig{TX: tx, RX: rx})
 	uart1.Configure(machine.UARTConfig{TX: tx1, RX: rx1, BaudRate: 9600})
 
+	println("exec")
 	exec("AT+FDEFAULT=Seeed", "+FDEFAULT: OK", 1000)
 	exec("AT+LOG=DEBUG", "+LOG: DEBUG", 1000)
 	exec("AT+MODE=TEST", "+MODE: TEST", 1000)

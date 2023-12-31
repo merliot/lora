@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+var (
+	ErrNoPkt = errors.New("No Rx packet")
+)
+
 type LoraE5 struct {
 	uart *machine.UART
 	buf  [1024]byte
@@ -34,7 +38,11 @@ func (l *LoraE5) response(wait int) []byte {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return l.buf[:i]
+	if i > 0 {
+		return l.buf[:i]
+	} else {
+		return []byte{}
+	}
 }
 
 func (l *LoraE5) exec(cmd, expect []byte, wait int) error {
@@ -67,33 +75,36 @@ func (l *LoraE5) Tx(msg []byte, wait int) error {
 	return l.exec(cmd, []byte("+TEST: TX DONE"), wait)
 }
 
-func (l *LoraE5) Rx(wait int) ([]byte, error) {
+func (l *LoraE5) Rx(wait int) [][]byte {
+	var pkts [][]byte
 	var cmd = []byte("AT+TEST=RXLRPKT\r\n")
 	var expect = []byte("+TEST: RX ")
-	//println(string(cmd))
+	println(string(cmd))
 	l.uart.Write(cmd)
 	resp := l.response(wait)
-	//println(string(resp))
+	println(string(resp))
 	reader := bytes.NewReader(resp)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		//println("SCAN", scanner.Text())
+		println("SCAN", scanner.Text())
 		scan := scanner.Bytes()
 		if bytes.HasPrefix(scan, expect) {
-			pktHex := scan[len(expect)+1 : len(scan)-1]
-			pkt := make([]byte, hex.DecodedLen(len(pktHex)))
-			hex.Decode(pkt, pktHex)
-			//println(string(pkt))
-			return pkt, nil
+			if len(scan) >= len(expect)+4 {
+				pktHex := scan[len(expect)+1 : len(scan)-1]
+				pkt := make([]byte, hex.DecodedLen(len(pktHex)))
+				hex.Decode(pkt, pktHex)
+				println(string(pkt))
+				pkts = append(pkts, pkt)
+			}
 		}
 	}
-	return nil, errors.New("No Rx packet")
+	return pkts
 }
 
 func (l *LoraE5) RxPoll(out chan []byte, wait int) {
 	for {
-		pkt, err := l.Rx(wait)
-		if err == nil {
+		pkts := l.Rx(wait)
+		for _, pkt := range pkts {
 			out <- pkt
 		}
 	}
@@ -122,8 +133,10 @@ var cmds = map[string]command{
 		wait:   1000,
 	},
 	"rfcfg": {
-		cmd:    []byte("AT+TEST=RFCFG,902.3,SF7,125,12,15,14,ON,OFF,OFF"),
-		expect: []byte("+TEST: RFCFG F:902300000, SF7, BW125K, TXPR:12, RXPR:15, POW:14dBm, CRC:ON, IQ:OFF, NET:OFF"),
+		//cmd:    []byte("AT+TEST=RFCFG,902.3,SF7,125,12,15,14,ON,OFF,OFF"),
+		//expect: []byte("+TEST: RFCFG F:902300000, SF7, BW125K, TXPR:12, RXPR:15, POW:14dBm, CRC:ON, IQ:OFF, NET:OFF"),
+		cmd:    []byte("AT+TEST=RFCFG,902.3,SF7,125,12,15,22,ON,OFF,OFF"),
+		expect: []byte("+TEST: RFCFG F:902300000, SF7, BW125K, TXPR:12, RXPR:15, POW:22dBm, CRC:ON, IQ:OFF, NET:OFF"),
 		wait:   1000,
 	},
 }
